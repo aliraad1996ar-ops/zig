@@ -7,3 +7,5 @@
 .fineprint{font-size:12px!important;color:#a8b19a!important;line-height:1.8}.score small{font-size:23px;color:#899975}.leaderrow small{font-size:12px;color:#9aa98a}.recordbutton:focus-visible{outline:3px solid white;outline-offset:5px}button{touch-action:manipulation}
 
 @media(max-width:760px){header{flex-wrap:wrap;gap:12px}.brand{font-size:21px}}
+
+.leaderaudio{grid-column:2 / -1;min-width:0}.leaderaudio audio{display:block;width:100%;max-width:420px;margin:0;height:42px}.leaderrow{row-gap:10px}

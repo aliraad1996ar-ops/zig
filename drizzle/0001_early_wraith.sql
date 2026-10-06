@@ -1,0 +1,1 @@
+ALTER TABLE `players` ADD `audio_key` text;
