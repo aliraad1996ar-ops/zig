@@ -1,7 +1,8 @@
 const MAX_SCORE = 1_000_000;
 
 export function calculateScore(samples: Int16Array) {
-  if (!isZeegLike(samples)) return 0;
+  const profile = zeegProfile(samples);
+  if (!profile) return 0;
   let strongest = 0;
   for (let start = 0; start + 1600 <= samples.length; start += 800) {
     let sum = 0;
@@ -10,7 +11,7 @@ export function calculateScore(samples: Int16Array) {
   }
   const dbfs = 20 * Math.log10(Math.max(strongest, 1e-8));
   const loudness = Math.max(0, Math.min(1, (dbfs + 60) / 60));
-  return Math.round(MAX_SCORE * loudness ** 3);
+  return Math.round(MAX_SCORE * loudness ** 3 * Math.min(1, Math.max(.15, profile.activeDuration / 1.5)));
 }
 
 /**
@@ -20,6 +21,10 @@ export function calculateScore(samples: Int16Array) {
  * earns zero instead of filling the board with talking.
  */
 export function isZeegLike(samples: Int16Array) {
+  return Boolean(zeegProfile(samples));
+}
+
+function zeegProfile(samples: Int16Array): {activeDuration:number}|null {
   const frameSize = 400; // 25 ms at the 16 kHz recording rate
   const active: {start: number; rms: number}[] = [];
   let loudestStart = 0, loudestRms = 0;
@@ -36,17 +41,12 @@ export function isZeegLike(samples: Int16Array) {
   }
 
   // Silence, clicks, and long sentences do not qualify.
-  if (active.length < 2 || loudestRms < 0.035) return false;
+  if (active.length < 2 || loudestRms < 0.035) return null;
   const activeDuration = active.length * 0.025;
-  if (activeDuration > 1.25) return false;
+  if (activeDuration > 3) return null;
 
   // A voiced syllable has a stable repeating period between 80–320 Hz.
   // A zeeg/noise burst does not. Check the loudest 25 ms window.
-  let energy = 0;
-  for (let i = loudestStart; i < loudestStart + frameSize; i++) {
-    const value = samples[i] / 32768;
-    energy += value * value;
-  }
   let strongestPitch = 0;
   for (let lag = 50; lag <= 200; lag += 3) {
     let dot = 0, left = 0, right = 0;
@@ -56,12 +56,12 @@ export function isZeegLike(samples: Int16Array) {
     }
     strongestPitch = Math.max(strongestPitch, dot / Math.sqrt(Math.max(left * right, 1e-9)));
   }
-  if (strongestPitch > 0.52) return false;
+  if (strongestPitch > 0.52) return null;
 
   let crossings = 0;
   for (let i = loudestStart + 1; i < loudestStart + frameSize; i++) {
     if ((samples[i] >= 0) !== (samples[i - 1] >= 0)) crossings++;
   }
   const crossingRate = crossings / (frameSize - 1);
-  return crossingRate > 0.035 && crossingRate < 0.65;
+  return crossingRate > 0.035 && crossingRate < 0.65 ? {activeDuration} : null;
 }

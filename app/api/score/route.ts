@@ -8,7 +8,7 @@ export async function POST(req: Request) {
     const participant = await player(req);
     if (!participant) return Response.json({error: 'سجّل معلوماتك أولاً.'}, {status: 401});
     if (req.headers.get('content-type') !== 'application/octet-stream') return new Response(null, {status: 415});
-    if (Number(req.headers.get('content-length')) > 96000) return new Response(null, {status: 413});
+    if (Number(req.headers.get('content-length')) > 384000) return new Response(null, {status: 413});
     const reader = req.body?.getReader();
     if (!reader) return new Response(null, {status: 400});
     const chunks: Uint8Array[] = []; let size = 0;
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
       const {done, value} = await reader.read();
       if (done) break;
       size += value.length;
-      if (size > 96000) { await reader.cancel(); return new Response(null, {status: 413}); }
+      if (size > 384000) { await reader.cancel(); return new Response(null, {status: 413}); }
       chunks.push(value);
     }
     if (size < 32000 || size % 2) return Response.json({error: 'التسجيل قصير. جرّب تسجّل مرة ثانية.'}, {status: 400});
