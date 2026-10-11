@@ -1,3 +1,31 @@
-import {db,hash,player,originOK,failure} from '@/lib/server';
-export async function GET(req:Request){try{return Response.json({player:await player(req)},{headers:{'Cache-Control':'no-store'}})}catch(e){return failure(e)}}
-export async function POST(req:Request){try{if(!originOK(req))return new Response(null,{status:403});if(Number(req.headers.get('content-length'))>4096)return new Response(null,{status:413});const body=await req.json();if(!body||typeof body!=="object")return new Response(null,{status:400});const b=body as Record<string,unknown>;const name=typeof b.name==='string'?b.name.trim().replace(/\s+/g,' '):'';const email=typeof b.email==='string'?b.email.trim().toLowerCase():'';const phone=typeof b.phone==='string'?b.phone.trim():'';if(name.split(' ').length<3||name.length>100||!/^\S+@\S+\.\S+$/.test(email)||email.length>254||phone.length>25||phone&&!/^[+\d\s()-]+$/.test(phone))return Response.json({error:'اكتب اسمك الثلاثي وإيميل صحيح، وتأكد من الرقم.'},{status:400});const existing=await player(req);if(existing)return Response.json({player:existing});const id=crypto.randomUUID(),token=crypto.randomUUID()+crypto.randomUUID();await db().prepare('INSERT INTO players (id,name,email,phone,session_hash,created_at) VALUES (?,?,?,?,?,?)').bind(id,name,email,phone||null,await hash(token),Date.now()).run();return Response.json({player:{id,name,best:0}},{headers:{'Set-Cookie':`zeeg_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${new URL(req.url).protocol==='https:'?'; Secure':''}`}})}catch(e){return failure(e)}}
+import {db,hash,player,originOK,failure,CURRENT_SEASON} from '@/lib/server';
+
+function publicPlayer(value: Awaited<ReturnType<typeof player>>) {
+  return value && {...value, best: value.score_season === CURRENT_SEASON ? value.best : 0};
+}
+
+export async function GET(req: Request) {
+  try { return Response.json({player: publicPlayer(await player(req))}, {headers: {'Cache-Control': 'no-store'}}); }
+  catch (error) { return failure(error); }
+}
+
+export async function POST(req: Request) {
+  try {
+    if (!originOK(req)) return new Response(null, {status: 403});
+    if (Number(req.headers.get('content-length')) > 4096) return new Response(null, {status: 413});
+    const body = await req.json();
+    if (!body || typeof body !== 'object') return new Response(null, {status: 400});
+    const input = body as Record<string, unknown>;
+    const name = typeof input.name === 'string' ? input.name.trim().replace(/\s+/g, ' ') : '';
+    const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
+    const phone = typeof input.phone === 'string' ? input.phone.trim() : '';
+    if (name.split(' ').length < 3 || name.length > 100 || !/^\S+@\S+\.\S+$/.test(email) || email.length > 254 || phone.length > 25 || phone && !/^[+\d\s()-]+$/.test(phone)) {
+      return Response.json({error: 'اكتب اسمك الثلاثي وإيميل صحيح، وتأكد من الرقم.'}, {status: 400});
+    }
+    const existing = await player(req);
+    if (existing) return Response.json({player: publicPlayer(existing)});
+    const id = crypto.randomUUID(), token = crypto.randomUUID() + crypto.randomUUID();
+    await db().prepare('INSERT INTO players (id,name,email,phone,session_hash,score_season,created_at) VALUES (?,?,?,?,?,?,?)').bind(id, name, email, phone || null, await hash(token), CURRENT_SEASON, Date.now()).run();
+    return Response.json({player: {id, name, best: 0, score_season: CURRENT_SEASON}}, {headers: {'Set-Cookie': `zeeg_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${new URL(req.url).protocol === 'https:' ? '; Secure' : ''}`}});
+  } catch (error) { return failure(error); }
+}

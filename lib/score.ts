@@ -1,1 +1,13 @@
-export function calculateScore(samples:Int16Array){let strongest=0;for(let start=0;start+1600<=samples.length;start+=800){let sum=0;for(let i=start;i<start+1600;i++)sum+=(samples[i]/32768)**2;strongest=Math.max(strongest,Math.sqrt(sum/1600))}const dbfs=20*Math.log10(Math.max(strongest,1e-8));return Math.max(0,Math.min(100,Math.round((dbfs+60)/60*100)))}
+const MAX_SCORE = 1_000_000;
+
+export function calculateScore(samples: Int16Array) {
+  let strongest = 0;
+  for (let start = 0; start + 1600 <= samples.length; start += 800) {
+    let sum = 0;
+    for (let i = start; i < start + 1600; i++) sum += (samples[i] / 32768) ** 2;
+    strongest = Math.max(strongest, Math.sqrt(sum / 1600));
+  }
+  const dbfs = 20 * Math.log10(Math.max(strongest, 1e-8));
+  const loudness = Math.max(0, Math.min(1, (dbfs + 60) / 60));
+  return Math.round(MAX_SCORE * loudness ** 3);
+}

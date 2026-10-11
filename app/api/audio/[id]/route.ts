@@ -1,9 +1,9 @@
-import {db,bucket,failure} from '@/lib/server';
+import {db,bucket,failure,CURRENT_SEASON} from '@/lib/server';
 export async function GET(req:Request,{params}:{params:Promise<{id:string}>}){
  try{
   const {id}=await params;
   if(!/^[a-f0-9-]{36}$/.test(id))return new Response(null,{status:404});
-  const row=await db().prepare('SELECT audio_key FROM players WHERE id=? AND attempts>0').bind(id).first<{audio_key:string|null}>();
+  const row=await db().prepare('SELECT audio_key FROM players WHERE id=? AND attempts>0 AND score_season=?').bind(id,CURRENT_SEASON).first<{audio_key:string|null}>();
   if(!row?.audio_key)return new Response(null,{status:404});
   const file=await bucket().get(row.audio_key);if(!file)return new Response(null,{status:404});
   const data=await file.arrayBuffer();
