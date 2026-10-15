@@ -11,14 +11,14 @@ export function calculateScore(samples: Int16Array) {
   }
   const dbfs = 20 * Math.log10(Math.max(strongest, 1e-8));
   const loudness = Math.max(0, Math.min(1, (dbfs + 60) / 60));
-  return Math.round(MAX_SCORE * loudness ** 3 * Math.min(1, Math.max(.15, profile.activeDuration / 1.5)));
+  // Strength is the larger influence, while a sustained zeeg earns a bonus.
+  const durationBonus = Math.min(1, Math.max(.12, profile.activeDuration / 2.5));
+  return Math.round(MAX_SCORE * loudness ** 2.4 * durationBonus);
 }
 
 /**
- * A zeeg is normally a short, noisy burst. Speech has a sustained voiced
- * waveform (a strong pitch correlation), so reject it before loudness is
- * turned into points. This is intentionally conservative: uncertain audio
- * earns zero instead of filling the board with talking.
+ * Treat only near-silent recordings as invalid. Microphones and real zeeg
+ * sounds vary too much for a narrow pitch/noise filter to be fair.
  */
 export function isZeegLike(samples: Int16Array) {
   return Boolean(zeegProfile(samples));
@@ -26,8 +26,8 @@ export function isZeegLike(samples: Int16Array) {
 
 function zeegProfile(samples: Int16Array): {activeDuration:number}|null {
   const frameSize = 400; // 25 ms at the 16 kHz recording rate
-  const active: {start: number; rms: number}[] = [];
-  let loudestStart = 0, loudestRms = 0;
+  const frames: {rms: number}[] = [];
+  let loudestRms = 0;
 
   for (let start = 0; start + frameSize <= samples.length; start += frameSize) {
     let sum = 0;
@@ -36,32 +36,14 @@ function zeegProfile(samples: Int16Array): {activeDuration:number}|null {
       sum += value * value;
     }
     const rms = Math.sqrt(sum / frameSize);
-    if (rms > 0.025) active.push({start, rms});
-    if (rms > loudestRms) { loudestRms = rms; loudestStart = start; }
+    frames.push({rms});
+    loudestRms = Math.max(loudestRms, rms);
   }
 
-  // Silence, clicks, and long sentences do not qualify.
-  if (active.length < 2 || loudestRms < 0.035) return null;
+  if (loudestRms < 0.006) return null;
+  const activeThreshold = Math.max(0.004, loudestRms * .1);
+  const active = frames.filter(frame => frame.rms >= activeThreshold);
+  if (!active.length) return null;
   const activeDuration = active.length * 0.025;
-  if (activeDuration > 3) return null;
-
-  // A voiced syllable has a stable repeating period between 80–320 Hz.
-  // A zeeg/noise burst does not. Check the loudest 25 ms window.
-  let strongestPitch = 0;
-  for (let lag = 50; lag <= 200; lag += 3) {
-    let dot = 0, left = 0, right = 0;
-    for (let i = loudestStart + lag; i < loudestStart + frameSize; i++) {
-      const a = samples[i] / 32768, b = samples[i - lag] / 32768;
-      dot += a * b; left += a * a; right += b * b;
-    }
-    strongestPitch = Math.max(strongestPitch, dot / Math.sqrt(Math.max(left * right, 1e-9)));
-  }
-  if (strongestPitch > 0.52) return null;
-
-  let crossings = 0;
-  for (let i = loudestStart + 1; i < loudestStart + frameSize; i++) {
-    if ((samples[i] >= 0) !== (samples[i - 1] >= 0)) crossings++;
-  }
-  const crossingRate = crossings / (frameSize - 1);
-  return crossingRate > 0.035 && crossingRate < 0.65 ? {activeDuration} : null;
+  return {activeDuration};
 }

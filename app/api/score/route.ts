@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       if (size > 384000) { await reader.cancel(); return new Response(null, {status: 413}); }
       chunks.push(value);
     }
-    if (size < 32000 || size % 2) return Response.json({error: 'التسجيل قصير. جرّب تسجّل مرة ثانية.'}, {status: 400});
+    if (size < 8000 || size % 2) return Response.json({error: 'التسجيل قصير. جرّب تسجّل مرة ثانية.'}, {status: 400});
     const bytes = new Uint8Array(size); let position = 0;
     for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.length; }
     const pcm = new Int16Array(bytes.buffer), score = calculateScore(pcm), now = Date.now();
